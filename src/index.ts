@@ -7,7 +7,9 @@ async function createTokenMint(
   payer: web3.Keypair,
   mintAuthority: web3.PublicKey,
   freezeAuthority: web3.PublicKey,
-  decimals: number
+  decimals: number,
+  keypair:web3.Keypair,
+  confirmOptions:web3.ConfirmOptions
 ): Promise<web3.PublicKey> {
 
   const tokenMint = await token.createMint(
@@ -15,7 +17,9 @@ async function createTokenMint(
     payer,
     mintAuthority,
     freezeAuthority,
-    decimals
+    decimals,
+    keypair,
+    confirmOptions
   );
 
   console.log(`The token mint account address is ${tokenMint}`)
@@ -32,13 +36,13 @@ async function createTokenAccount(
   mint: web3.PublicKey,
   owner: web3.PublicKey
 ) {
+
   const tokenAccount = await token.getOrCreateAssociatedTokenAccount(
       connection,
       payer,
       mint,
       owner
   )
-  
   console.log(
       `Token Account: https://explorer.solana.com/address/${tokenAccount.address}?cluster=devnet`
   )
@@ -70,22 +74,75 @@ async function mintTokens(
   )
 }
 
+async function transferTokens(
+  connection: web3.Connection,
+  payer: web3.Keypair,
+  source: web3.PublicKey,
+  destination: web3.PublicKey,
+  owner: web3.PublicKey,
+  amount: number,
+  mint: web3.PublicKey
+) {
+  const mintInfo = await token.getMint(connection, mint)
+
+  const transactionSignature = await token.transfer(
+    connection,
+    payer,
+    source,
+    destination,
+    owner,
+    amount * 10 ** mintInfo.decimals
+  )
+
+  console.log(
+    `Transfer Transaction: https://explorer.solana.com/tx/${transactionSignature}?cluster=devnet`
+  )
+}
+
+async function burnTokens(
+    connection: web3.Connection,
+    payer: web3.Keypair,
+    account: web3.PublicKey,
+    mint: web3.PublicKey,
+    owner: web3.Keypair,
+    amount: number
+) {
+
+    const mintInfo = await token.getMint(connection, mint)
+    
+    const transactionSignature = await token.burn(
+        connection,
+        payer,
+        account,
+        mint,
+        owner,
+        amount * 10 ** mintInfo.decimals
+    )
+
+    console.log(
+        `Burn Transaction: https://explorer.solana.com/tx/${transactionSignature}?cluster=devnet`
+    )
+}
+
 async function main() {
   const connection = new web3.Connection(web3.clusterApiUrl("devnet"))
   const user = await initializeKeypair(connection)
 
   console.log("PublicKey:", user.publicKey.toBase58())
 
+  /*
   const mint = await createTokenMint(
     connection,
     user,           // We'll pay the fees
     user.publicKey, // We're the mint authority
     user.publicKey, // And the freeze authority >:)
-    2               // Only two decimals!
-  )
+    2,              // Only two decimals!
+    web3.Keypair.generate(),
+    {commitment:"finalized"}
+  ) */
+  const mint = new web3.PublicKey("CywzLYpKBuCwZKLBWH764bSoLbN6zUiscJH1ViZfCdEA")
 
-  console.log("Mint:", mint)
-
+  // Create a token account for our address
   const tokenAccount = await createTokenAccount(
     connection,     
     user,           
@@ -93,9 +150,31 @@ async function main() {
     user.publicKey   // Associating our address with the token account
   )
   
-  console.log("Token Account:", tokenAccount)
   // Mint 100 tokens to our address
   await mintTokens(connection, user, mint, tokenAccount.address, user, 100)
+  
+  // const receiver = web3.Keypair.generate().publicKey
+  const receiver = new web3.PublicKey("J97KxAfxFDmp6Ctmb9QWnqGR4vasFxJ8mqVDXoq1MjpT")
+    
+  const receiverTokenAccount = await createTokenAccount(
+      connection,
+      user,
+      mint,
+      receiver
+  )
+
+  await transferTokens(
+      connection,
+      user,
+      tokenAccount.address,
+      receiverTokenAccount.address,
+      user.publicKey,
+      50,
+      mint
+  )
+  
+  await burnTokens(connection, user, tokenAccount.address, mint, user, 25)
+
 }
 
 
