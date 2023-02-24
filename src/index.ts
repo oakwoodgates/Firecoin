@@ -75,6 +75,27 @@ async function main() {
   const user = await initializeKeypair(connection)
 
   console.log("PublicKey:", user.publicKey.toBase58())
+
+  const mint = await createTokenMint(
+    connection,
+    user,           // We'll pay the fees
+    user.publicKey, // We're the mint authority
+    user.publicKey, // And the freeze authority >:)
+    2               // Only two decimals!
+  )
+
+  console.log("Mint:", mint)
+
+  const tokenAccount = await createTokenAccount(
+    connection,     
+    user,           
+    mint,            
+    user.publicKey   // Associating our address with the token account
+  )
+  
+  console.log("Token Account:", tokenAccount)
+  // Mint 100 tokens to our address
+  await mintTokens(connection, user, mint, tokenAccount.address, user, 100)
 }
 
 
